@@ -7,6 +7,7 @@ from sanic_jwt_extended import JWT
 
 load_dotenv()
 SALT = os.getenv("SALT")
+SALT_LINK = os.getenv("SALT_LINK")
 
 
 def get_pass(password: str, salt: str = SALT) -> str | None:
@@ -39,3 +40,12 @@ def get_refresh_token(identity: str) -> str:
         identity=identity,
         expires_delta=datetime.timedelta(days=1),
     )
+
+
+def create_key(name: str) -> str:
+    return hashlib.md5((SALT_LINK + name).encode()).hexdigest()
+
+def create_link(key: str) -> str:
+    url = "http://127.0.0.1:8000/user/checklink/"
+    return  url + key
+
