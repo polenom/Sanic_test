@@ -10,8 +10,9 @@ from sanic_jwt_extended.tokens import Token
 from tortoise.contrib.sanic import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
+from app.decorators import is_admin
 from app.models import User, Products, Bill, CheckUser
-from app.serializer import ProductsSerializer
+from app.serializer import ProductsSerializer, BillSerializer, TransactionSerializer
 from app.utils import *
 from dotenv import load_dotenv
 
@@ -24,12 +25,13 @@ with JWT.initialize(app) as manager:
     manager.config.secret_key = os.getenv("TOKEN")
 
 
-
 @app.get("/")
 @jwt_required
 async def hello_world(request: Request, token: Token):
     print(request)
     return text("hello world")
+
+
 #
 #
 @app.route("/user/create/", methods=['POST'])
@@ -59,7 +61,7 @@ async def create_user(request):
 
 @app.route("/user/checklink/<key>", methods=["GET"])
 async def check_link(request: Request, key: str):
-    urlrow = await CheckUser.filter(url = key)
+    urlrow = await CheckUser.filter(url=key)
     if not urlrow:
         return json(error_response("Link does not exist"), status=400)
     user = await urlrow[0].user
@@ -119,6 +121,50 @@ async def products(request: Request):
         'error': False
     }, status=200)
 
+
+@app.route("/user/bill/", methods=["GET"])
+@jwt_required
+@is_admin
+async def get_bill(request: Request, token: Token):
+    user = await User.get(name=token.identity)
+    bills = await user.bill.all()
+    serializer = BillSerializer(bills)
+    return json({
+        "error": False,
+        "bills": serializer.get_json()
+    })
+
+
+@app.route("/user/transaction/", methods=["GET"])
+@jwt_required
+async def get_transaction(request: Request, token: Token):
+    user = await User.get(name=token.identity)
+    transactions = await  user.transaction.all()
+    serializer = TransactionSerializer(transactions)
+    return json({
+        "error": False,
+        "transactions": serializer.get_json()
+    })
+
+@app.route("/product/get/", methods=["POST"])
+@jwt_required
+async def buy_product(request: Request, token: Token):
+    productId = request.json.get('idproduct')
+    idbill = request.json.get('idbill')
+    if not productId or not idbill:
+        return json(error_response("Miss parameters"), status=400)
+    user = await User.get(name=token.identity)
+    product = await Products.filter(id=int(productId))
+    bill = await Bill.filter(idBill=idbill)
+    if not product:
+        return json(error_response("Product does not exist"))
+    if user.id != bill[0].user_id and bill[0].balance < product[0].cost:
+        return json(error_response("Insufficient funds"))
+    bill[0].balance = bill[0].balance - product[0].cost
+    await bill[0].save()
+    return json({
+        'error': False
+    }, status=200)
 
 
 if __name__ == "__main__":

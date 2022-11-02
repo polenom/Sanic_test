@@ -31,7 +31,7 @@ def get_access_and_refresh_tokens(identity: str) -> tuple[str]:
 def get_access_token(identity: str) -> str:
     return JWT.create_access_token(
         identity=identity,
-        expires_delta=datetime.timedelta(minutes=5)
+        expires_delta=datetime.timedelta(minutes=50)
     )
 
 
@@ -45,7 +45,7 @@ def get_refresh_token(identity: str) -> str:
 def create_key(name: str) -> str:
     return hashlib.md5((SALT_LINK + name).encode()).hexdigest()
 
+
 def create_link(key: str) -> str:
     url = "http://127.0.0.1:8000/user/checklink/"
-    return  url + key
-
+    return url + key
