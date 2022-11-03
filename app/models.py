@@ -9,7 +9,7 @@ class User(Model):
     password = fields.CharField(200)
     isAdmin = fields.BooleanField(default=False)
     isCheckUser = fields.BooleanField(default=False)
-    isEnabled = fields.BooleanField(default=False)
+    isEnabled = fields.BooleanField(default=True)
 
     def to_dict(self):
         return {"user_id": self.id, "username": self.name}
@@ -42,8 +42,10 @@ class Bill(Model):
 
 class Transaction(Model):
     id = fields.SmallIntField(pk=True)
-    bill = fields.ForeignKeyField('models.Bill', related_name='transaction', on_delete="CASCADE")
+    user = fields.ForeignKeyField('models.User', related_name='transaction', on_delete="CASCADE")
     idTran = fields.IntField()
     amount = fields.FloatField()
+
+
 
 

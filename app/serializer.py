@@ -1,4 +1,4 @@
-from app.models import Products, Bill, Transaction
+from app.models import Products, Bill, Transaction, User
 
 
 class ProductsSerializer():
@@ -36,4 +36,15 @@ class TransactionSerializer(ProductsSerializer):
             "id": elem.id,
             "idTransaction": elem.idTran,
             "amount": elem.amount
+        }
+
+
+class UserSerializer(ProductsSerializer):
+    def obj_to_dict(self, elem: User ) -> dict:
+        return {
+            "id": elem.id,
+            "username": elem.name,
+            "email": elem.email,
+            "isEnabled": elem.isEnabled,
+            "isCheckUser":  elem.isCheckUser
         }

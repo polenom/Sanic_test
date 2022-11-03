@@ -1,22 +1,22 @@
-import datetime
-import os
-import json as JSON
-
 from sanic import Sanic
-from sanic.response import text, json, Request
-from sanic_jwt import Initialize, protected
+from sanic.response import text, json, Request, HTTPResponse
 from sanic_jwt_extended import JWT, refresh_jwt_required, jwt_required
 from sanic_jwt_extended.tokens import Token
 from tortoise.contrib.sanic import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
+from app.CRUD.view import ProductsView
 from app.decorators import is_admin
 from app.models import User, Products, Bill, CheckUser
-from app.serializer import ProductsSerializer, BillSerializer, TransactionSerializer
+from app.payment import payment
+from app.serializer import  BillSerializer, TransactionSerializer, UserSerializer
 from app.utils import *
 from dotenv import load_dotenv
 
+
 app = Sanic("My_app")
+app.add_route(ProductsView.as_view(), '/products/')
+app.add_route(payment, '/payment/webhook', methods=["POST"])
 load_dotenv()
 register_tortoise(app, db_url="postgres://sanic:sanic@0.0.0.0:2020/sanicproject", modules={"models": ["app.models"]},
                   generate_schemas=True)
@@ -24,13 +24,16 @@ register_tortoise(app, db_url="postgres://sanic:sanic@0.0.0.0:2020/sanicproject"
 with JWT.initialize(app) as manager:
     manager.config.secret_key = os.getenv("TOKEN")
 
-
 @app.get("/")
 @jwt_required
 async def hello_world(request: Request, token: Token):
     print(request)
     return text("hello world")
 
+
+@app.middleware('response')
+async def custom_banner(request: Request, response: HTTPResponse):
+    response.headers['content-type'] = "application/json"
 
 #
 #
@@ -111,15 +114,15 @@ async def refresh(request: Request, token: Token):
     )
 
 
-@app.route("/products/", methods=["GET"])
-async def products(request: Request):
-    products = await Products.all()
-    serializer = ProductsSerializer(products)
-    productsJSON = serializer.get_json()
-    return json({
-        'products': productsJSON,
-        'error': False
-    }, status=200)
+# @app.route("/products/", methods=["GET"])
+# async def products(request: Request):
+#     products = await Products.all()
+#     serializer = ProductsSerializer(products)
+#     productsJSON = serializer.get_json()
+#     return json({
+#         'products': productsJSON,
+#         'error': False
+#     }, status=200)
 
 
 @app.route("/user/bill/", methods=["GET"])
@@ -146,6 +149,7 @@ async def get_transaction(request: Request, token: Token):
         "transactions": serializer.get_json()
     })
 
+
 @app.route("/product/get/", methods=["POST"])
 @jwt_required
 async def buy_product(request: Request, token: Token):
@@ -165,6 +169,57 @@ async def buy_product(request: Request, token: Token):
     return json({
         'error': False
     }, status=200)
+
+
+@app.route("/admin/users/", methods=["GET"])
+@jwt_required
+@is_admin
+async def get_all_users_bill(request: Request, token: Token):
+    users = await User.all()
+    serializer = UserSerializer(users)
+    return json({
+        "error": False,
+        "users": serializer.get_json()
+    }, status=200)
+
+
+@app.route("/admin/user/<username>", methods=["GET"])
+@jwt_required
+@is_admin
+async def get_bill_tran_user(request: Request, token: Token, username: str):
+    user = await User.filter(name=username)
+    if not user:
+        return json(error_response("User does not exist"), status=400)
+    bill = await user[0].bill.all()
+    tran = await user[0].transaction.all()
+    gerbil = BillSerializer(bill)
+    setraw = TransactionSerializer(tran)
+    return json({
+        "error": False,
+        "date": { "username": username,
+                  "bill": gerbil.get_json(),
+                  "transaction": setraw.get_json()
+        }
+    })
+
+
+@app.route("/admin/user/enadis/", methods=["PATCH", "PUT"])
+@jwt_required
+@is_admin
+async def enabled_disabled_user(request: Request, token: Token):
+    username = request.json.get("username")
+    enabled = request.json.get("enabled")
+    user = await User.filter(name=username)
+    if not user:
+        return json(error_response("User does not exist"), status=400)
+    if user[0].isEnabled != enabled:
+        user[0].isEnabled = enabled
+        await user[0].save()
+    return json({
+        "error": False,
+        "data": {"username": username,
+                 "enabled": enabled}
+    })
 
 
 if __name__ == "__main__":
